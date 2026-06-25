@@ -1,0 +1,370 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Latinske Izreke | LatinFFOS</title>
+
+<meta name="description" content="Zbirka latinskih izreka s prijevodima na hrvatski i engleski jezik, objašnjenjima značenja, autorima i izvorima. Pretražujte, analizirajte i spremajte omiljene latinske fraze.">
+<meta name="keywords" content="latinske izreke, latin phrases, latin quotes, latinski rječnik, hrvatski prijevod, english translation, rimske izreke, latinski citati">
+<meta name="author" content="LatinFFOS">
+<meta name="theme-color" content="#c0c0c0">
+<meta property="og:title" content="Latinske Izreke | LatinFFOS">
+<meta property="og:description" content="Pretražujte stotine latinskih izreka s prijevodima, značenjima i analizama.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/img/logo.png">
+
+<link rel="icon" href="/manifest/icon-192x192.png" type="image/png">
+<link rel="apple-touch-icon" href="./manifest/icon-192x192.png">
+
+<link rel="manifest" href="/manifest.json">
+<link rel="stylesheet" href="./css/style.css">
+
+        
+
+    </head>
+
+
+    <body>
+        
+    <div class="container">
+        <div class="header">
+
+
+        <input type="text" id="searchIcon" placeholder="Search">
+
+        <a href="./bookmarks.html"><img class="bookmarks" src="./img/silver_bookmark.png" alt="bookmark icon"></a>
+
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="engCheck" name="engleski" value="eng" checked>
+                <label for="engCheck" id="engLabel">English</label>
+
+                <input type="checkbox" id="hrvCheck" name="hrvatski" value="hrv" checked>
+                <label for="hrvCheck" id="hrvLabel">Hrvatski</label>
+
+                <input type="checkbox" id="explCheck" name="explanation" value="expl" checked>
+                <label for="explCheck" id="explLabel">Explanation</label>
+            </div>
+        </div>
+
+        
+        <div class="header-spacer"></div>
+
+
+
+        <div id="phrases-container"></div>
+
+
+
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+<script>
+// ===============================
+// GLOBAL STATE
+// ===============================
+
+const PAGE_SIZE = 100;
+
+let allPhrases = [];
+let filteredPhrases = [];
+let currentPage = 0;
+let isLoading = false;
+
+// ===============================
+// BOOKMARK STORAGE
+// ===============================
+
+function getBookmarks() {
+    return JSON.parse(localStorage.getItem("bookmarkedPhrases")) || [];
+}
+
+function saveBookmarks(bookmarks) {
+    localStorage.setItem("bookmarkedPhrases", JSON.stringify(bookmarks));
+}
+
+function isBookmarked(phrase) {
+    return getBookmarks().includes(phrase);
+}
+
+// ===============================
+// LOAD JSON
+// ===============================
+
+async function loadPhrases() {
+    try {
+        const response = await fetch('/json/fraze_prevedene.json');
+        if (!response.ok) throw new Error('Failed to load JSON');
+
+        const data = await response.json();
+
+        allPhrases = data.entries;
+        filteredPhrases = [...allPhrases];
+        currentPage = 0;
+
+        renderNextPage();
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+// ===============================
+// RENDERING
+// ===============================
+
+function renderNextPage() {
+    if (isLoading) return;
+    isLoading = true;
+
+    const container = document.getElementById('phrases-container');
+
+    const start = currentPage * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    const slice = filteredPhrases.slice(start, end);
+
+    const fragment = document.createDocumentFragment();
+
+    slice.forEach(entry => {
+        fragment.appendChild(createPhraseElement(entry));
+    });
+
+    container.appendChild(fragment);
+    currentPage++;
+    isLoading = false;
+}
+
+function resetAndRender(list) {
+    const container = document.getElementById('phrases-container');
+    container.innerHTML = '';
+
+    filteredPhrases = list;
+    currentPage = 0;
+
+    renderNextPage();
+}
+
+// ===============================
+// PHRASE ELEMENT FACTORY
+// ===============================
+
+function createPhraseElement(entry) {
+    const phraseDiv = document.createElement('div');
+    phraseDiv.className = 'phrase';
+
+    const original = document.createElement('div');
+    original.className = 'original';
+    original.textContent = entry.phrase;
+
+    // ---------- BOOKMARK ----------
+    const bookmark = document.createElement('div');
+    bookmark.className = 'bookmark';
+
+    const img = document.createElement('img');
+    img.classList.add('silver_bookmark');
+    img.dataset.phrase = entry.phrase;
+    img.alt = 'Bookmark';
+  img.src = isBookmarked(entry.phrase)
+    ? './img/gold_bookmark.png'
+    : './img/silver_bookmark.png';
+
+    // bookmark click handler
+        img.addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            // restart animation if clicked fast
+            img.classList.remove('bookmark-pop');
+            void img.offsetWidth; // force reflow   
+            img.classList.add('bookmark-pop');
+
+            const phrase = img.dataset.phrase;
+            let bookmarks = getBookmarks();
+
+            if (bookmarks.includes(phrase)) {
+                bookmarks = bookmarks.filter(p => p !== phrase);
+                img.src = './img/silver_bookmark.png';
+            } else {
+                bookmarks.push(phrase);
+                img.src = '/img/gold_bookmark.png';
+            }
+
+            saveBookmarks(bookmarks);
+        });
+        
+
+    bookmark.appendChild(img);
+    original.appendChild(bookmark);
+    // ---------- END BOOKMARK ----------
+
+    // phrase click handler
+    original.addEventListener('click', () => {
+        window.location.href = `phrase.html?phrase=${encodeURIComponent(entry.phrase)}`;
+    });
+
+    const hrvatski = document.createElement('div');
+    hrvatski.className = 'hrvatski hr';
+    hrvatski.textContent = entry.common_translation?.hr || '';
+
+    const znacenje = document.createElement('div');
+    znacenje.className = 'znacenje';
+    znacenje.textContent = entry.znacenje?.hr || '';
+
+    const translation = document.createElement('div');
+    translation.className = 'translation en';
+    translation.textContent = entry.common_translation?.en || '';
+
+    const meaning = document.createElement('div');
+    meaning.className = 'meaning';
+    meaning.textContent = entry.meaning || '';
+
+    phraseDiv.append(original, hrvatski, znacenje, translation, meaning);
+
+    return phraseDiv;
+}
+
+// ===============================
+// SEARCH
+// ===============================
+
+function debounce(fn, delay = 250) {
+    let t;
+    return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), delay);
+    };
+}
+
+function setupSearch() {
+    const input = document.getElementById('searchIcon');
+
+    input.addEventListener('input', debounce(e => {
+        const q = e.target.value.toLowerCase().trim();
+
+        if (!q) {
+            resetAndRender(allPhrases);
+        } else {
+            const result = allPhrases.filter(entry =>
+                entry.phrase.toLowerCase().includes(q) ||
+                entry.common_translation?.en?.toLowerCase().includes(q) ||
+                entry.meaning?.toLowerCase().includes(q)
+            );
+            resetAndRender(result);
+        }
+    }));
+}
+
+// ===============================
+// INFINITE SCROLL
+// ===============================
+
+window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 400) {
+        renderNextPage();
+    }
+});
+
+// ===============================
+// CHECKBOX FILTERS
+// ===============================
+
+function setupCheckboxes() {
+    const engCheck = document.getElementById('engCheck');
+    const hrvCheck = document.getElementById('hrvCheck');
+    const explCheck = document.getElementById('explCheck');
+
+    engCheck.addEventListener('change', () => {
+        document.querySelectorAll('.meaning, .translation.en')
+            .forEach(el => el.classList.toggle('collapsed', !engCheck.checked));
+    });
+
+    hrvCheck.addEventListener('change', () => {
+        document.querySelectorAll('.znacenje, .hrvatski.hr')
+            .forEach(el => el.classList.toggle('collapsed', !hrvCheck.checked));
+    });
+
+    explCheck.addEventListener('change', () => {
+        document.querySelectorAll('.znacenje, .meaning')
+            .forEach(el => el.classList.toggle('collapsed', !explCheck.checked));
+    });
+}
+
+
+
+
+
+// ===============================
+// Sticky header
+// ===============================
+document.addEventListener("DOMContentLoaded", () => {
+    const header = document.querySelector(".header");
+    const spacer = document.querySelector(".header-spacer");
+
+    let scrollTimeout;
+
+    window.addEventListener("scroll", () => {
+
+        // Apply glass effect only after scrolling
+        if (window.scrollY > 20) {
+            header.classList.add("fixed");
+            header.classList.add("scrolled");
+            spacer.style.height = header.offsetHeight + "px";
+        } else {
+            header.classList.remove("fixed");
+            header.classList.remove("scrolled");
+            spacer.style.height = "0px";
+        }
+
+        // Mobile behaviour
+        if (window.innerWidth <= 768) {
+
+            // hide while scrolling
+            header.classList.add("hide-mobile");
+
+            clearTimeout(scrollTimeout);
+
+            // show again 1 second after scrolling stops
+            scrollTimeout = setTimeout(() => {
+                header.classList.remove("hide-mobile");
+            }, 1000);
+        }
+    });
+});
+        
+
+// ===============================
+// INIT
+// ===============================
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadPhrases();
+    setupSearch();
+    setupCheckboxes();
+});
+
+
+
+
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .then(() => console.log("Service Worker registered"))
+      .catch(err => console.error("SW registration failed:", err));
+  });
+}
+
+
+
+</script>
+    </body>
+    </html>

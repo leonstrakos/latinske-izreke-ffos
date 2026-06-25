@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Latin Phrase</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+
+
+
+
+<div class="phrasepage" id="phrase-container">
+    <p>Loading...</p>
+
+
+
+</div>
+
+
+
+<script>
+async function loadPhrase() {
+    const params = new URLSearchParams(window.location.search);
+    const phraseParam = params.get('phrase');
+
+    if (!phraseParam) {
+        document.getElementById('phrase-container').textContent = 'No phrase specified.';
+        return;
+    }
+
+    const decodedPhrase = decodeURIComponent(phraseParam);
+
+    try {
+        const response = await fetch('./fraze_prevedene.json');
+        const data = await response.json();
+
+        const entry = data.entries.find(e => e.phrase === decodedPhrase);
+
+        if (!entry) {
+            document.getElementById('phrase-container').textContent = 'Phrase not found.';
+            return;
+        }
+
+        renderEntry(entry);
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById('phrase-container').textContent = 'Error loading data.';
+    }
+}
+
+
+
+
+function renderEntry(entry) {
+    const container = document.getElementById('phrase-container');
+
+    const isSaved = isBookmarked(entry.phrase);
+    const bookmarkSrc = isSaved
+        ? "gold_bookmark.png"
+        : "silver_bookmark.png";
+
+    container.innerHTML = `
+        <img
+            class="silver_bookmark"
+            src="${bookmarkSrc}"
+            alt="bookmark icon"
+            data-phrase="${entry.phrase}"
+        >
+
+        <h1 class="phrasepage h1 chrome-text">„${entry.phrase}“</h1>
+
+        <div class="phrase-meta">
+            <span class="phrasepage author">— ${entry.author || "unknown"}</span>
+            <span class="phrasepage book">(${entry.book || ""})</span>
+        </div>
+
+        <p class="phrasepage year">${entry.year || "???"}</p>
+
+        <div class="phrase-block">
+            <h3 class="phraseh3" >English</h3>
+            <p class= "phrasep">${entry.common_translation?.en || ""}</p>
+
+            <h3 class="phraseh3">Hrvatski</h3>
+            <p class= "phrasep">${entry.common_translation?.hr || ""}</p>
+
+            <h3 class="phraseh3">Meaning</h3>
+            <p class= "phrasep">${entry.meaning || ""}</p>
+
+            <h3 class="phraseh3">Značenje</h3>
+            <p class= "phrasep">${entry.znacenje?.hr || ""}</p>
+        </div>
+    `;
+}
+
+document.addEventListener('DOMContentLoaded', loadPhrase);
+
+
+/////////////////////////////////////
+//===================================
+// BOOKMARKS
+
+
+document.addEventListener("click", (e) => {
+    if (!e.target.classList.contains("silver_bookmark")) return;
+
+    const img = e.target;
+
+    // 🔹 POP ANIMATION
+    img.classList.remove("bookmark-pop");
+    void img.offsetWidth; // force reflow so animation can replay
+    img.classList.add("bookmark-pop");
+
+    const phrase = img.dataset.phrase;
+    let bookmarks = getBookmarks();
+
+    if (bookmarks.includes(phrase)) {
+        bookmarks = bookmarks.filter(p => p !== phrase);
+        img.src = "silver_bookmark.png";
+    } else {
+        bookmarks.push(phrase);
+        img.src = "gold_bookmark.png";
+    }
+
+    saveBookmarks(bookmarks);
+});
+
+
+
+
+function getBookmarks() {
+    return JSON.parse(localStorage.getItem("bookmarkedPhrases")) || [];
+}
+
+function saveBookmarks(bookmarks) {
+    localStorage.setItem("bookmarkedPhrases", JSON.stringify(bookmarks));
+}
+
+function isBookmarked(phrase) {
+    return getBookmarks().includes(phrase);
+}
+
+
+
+
+
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .then(() => console.log("Service Worker registered"))
+      .catch(err => console.error("SW registration failed:", err));
+  });
+}
+
+</script>
+
+</body>
+</html>

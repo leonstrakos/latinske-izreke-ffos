@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bookmarked Phrases</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+
+<body>
+
+<div class="container">
+    
+    <!--
+    <div class="backarrow">
+        <a href="./index.html"><img id="arrow" src="./arrow.png" alt=""></a>
+    </div>
+    
+    
+    --->
+
+<div class="top-nav-icons">
+    <a href="./index.html" class="home-icon-wrapper">
+        <img src="./img/silver_bookmark.png" alt="home" class="home-bookmark-icon">
+    </a>
+</div>
+
+
+    <div id="phrases-container"></div>
+</div>
+
+<script>
+// ===============================
+// BOOKMARK STORAGE (SAME LOGIC)
+// ===============================
+
+function getBookmarks() {
+    return JSON.parse(localStorage.getItem("bookmarkedPhrases")) || [];
+}
+
+function saveBookmarks(bookmarks) {
+    localStorage.setItem("bookmarkedPhrases", JSON.stringify(bookmarks));
+}
+
+function isBookmarked(phrase) {
+    return getBookmarks().includes(phrase);
+}
+
+// ===============================
+// LOAD & FILTER JSON
+// ===============================
+
+let allPhrases = [];
+
+async function loadBookmarkedPhrases() {
+    try {
+        const response = await fetch('./json/fraze_prevedene.json');
+        const data = await response.json();
+
+        const bookmarked = getBookmarks();
+
+        // filter only bookmarked phrases
+        allPhrases = data.entries.filter(entry =>
+            bookmarked.includes(entry.phrase)
+        );
+
+        renderPhrases(allPhrases);
+
+    } catch (err) {
+        console.error('Failed to load bookmarks:', err);
+    }
+}
+
+// ===============================
+// RENDER
+// ===============================
+
+function renderPhrases(list) {
+    const container = document.getElementById('phrases-container');
+    container.innerHTML = '';
+
+    if (list.length === 0) {
+        container.innerHTML = '<p>No bookmarks yet.</p>';
+        return;
+    }
+
+    list.forEach(entry => {
+        const phraseDiv = document.createElement('div');
+        phraseDiv.className = 'phrase';
+
+        const original = document.createElement('div');
+        original.className = 'original chrome-text';
+        original.textContent = entry.phrase;
+
+                // phrase click handler
+        original.addEventListener('click', () => {
+            window.location.href = `phrase.html?phrase=${encodeURIComponent(entry.phrase)}`;
+        });
+
+
+
+        // bookmark icon
+        const bookmark = document.createElement('div');
+        bookmark.className = 'bookmark bookmark-page';
+
+        const img = document.createElement('img');
+        img.classList.add('silver_bookmark');
+        img.dataset.phrase = entry.phrase;
+        img.src = './img/gold_bookmark.png'; 
+
+        img.addEventListener("click", (e) => {
+            e.stopPropagation(); 
+
+            const phrase = img.dataset.phrase;
+            let bookmarks = getBookmarks();
+
+            bookmarks = bookmarks.filter(p => p !== phrase);
+            saveBookmarks(bookmarks);
+
+            img.closest('.phrase').remove();
+        });
+
+        bookmark.appendChild(img);
+        original.appendChild(bookmark);
+
+        const translation = document.createElement('div');
+        translation.className = 'translation en';
+        translation.textContent = entry.common_translation?.en || '';
+
+        const meaning = document.createElement('div');
+        meaning.className = 'meaning';
+        meaning.textContent = entry.meaning || '';
+
+        phraseDiv.appendChild(original);
+        phraseDiv.appendChild(translation);
+        phraseDiv.appendChild(meaning);
+
+        container.appendChild(phraseDiv);
+    });
+}
+
+
+
+// ===============================
+// INIT
+// ===============================
+
+document.addEventListener('DOMContentLoaded', loadBookmarkedPhrases);
+
+
+
+
+
+
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .then(() => console.log("Service Worker registered"))
+      .catch(err => console.error("SW registration failed:", err));
+  });
+}
+
+
+</script>
+
+</body>
+</html>

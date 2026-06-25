@@ -1,0 +1,439 @@
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Latin Phrase Analyzer</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.4; padding: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    th, td { border: 1px solid #ccc; padding: 8px; vertical-align: top; }
+    th { background: #f0f0f0; text-align: left; }
+    .sense-header { cursor: pointer; margin: 2px 0; }
+    .sense-children { display: none; margin-left: 16px; }
+    .sense-meta { font-size: 0.85em; color: #555; margin-top: 4px; margin-bottom: 2px; }
+  </style>
+  </head>
+  <body>
+
+  <h1>Latin Phrase Analyzer</h1>
+
+  <table id="latinTable">
+    <thead>
+      <tr>
+        <th>Riječ</th>
+        <th>Korijen</th>
+        <th>Oblik</th>
+        <th>Značenje</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+
+
+
+
+
+<script>
+console.log("SCRIPT LOADED");
+
+/* =========================
+   GLOBAL STATE
+========================= */
+let lewisShort = Object.create(null);
+
+/* =========================
+   LOAD LEWIS–SHORT
+========================= */
+async function loadLewisShort() {
+  const res = await fetch("./latindictionary.json");
+  const data = await res.json();
+
+  data.forEach(e => {
+    if (e.key && e.senses) {
+      lewisShort[e.key.toLowerCase()] = e.senses;
+    }
+  });
+
+  console.log("Lewis–Short loaded:", Object.keys(lewisShort).length);
+}
+
+/* =========================
+   URL PARAM
+========================= */
+function getQueryParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+/* =========================
+   LOAD PHRASES
+========================= */
+async function loadPhrases() {
+  const res = await fetch("./fraze_prevedene_enriched.json");
+  const data = await res.json();
+
+  const phrase = getQueryParam("phrase")?.toLowerCase();
+  if (!phrase) {
+    console.warn("No phrase in URL");
+    return;
+  }
+
+  const matches = data.entries.filter(e =>
+    e.phrase?.toLowerCase() === phrase ||
+    e.normalized?.toLowerCase() === phrase
+  );
+
+  if (!matches.length) {
+    console.warn("No matching phrase:", phrase);
+    return;
+  }
+
+  const analysis = matches.flatMap(e =>
+    (e.analysis || []).map(w => ({
+      form: w.form,
+      lemma: w.lemma,
+      upos: w.upos,
+      features: w.features,
+      meaning: e.meaning,
+      hr_meaning: e.znacenje?.hr
+    }))
+  );
+
+  console.log("Analysis:", analysis);
+  renderTable(analysis);
+}
+
+/* =========================
+   TAGS & GOVERNMENT
+========================= */
+function detectTags(text = "") {
+  const t = [];
+  if (/Prop\./i.test(text)) t.push("proper");
+  if (/Trop\./i.test(text)) t.push("figurative");
+  if (/In gen\./i.test(text)) t.push("general");
+  if (/In partic\./i.test(text)) t.push("specific");
+  if (/Absol\./i.test(text)) t.push("absolute");
+  return t;
+}
+
+function detectGovernment(text = "") {
+  const g = [];
+  if (/ab\s*:/i.test(text)) g.push("ab + abl");
+  if (/\babl\./i.test(text)) g.push("ablative");
+  if (/\bacc\./i.test(text)) g.push("accusative");
+  if (/\bgen\./i.test(text)) g.push("genitive");
+  if (/\bdat\./i.test(text)) g.push("dative");
+  return g;
+}
+
+/* =========================
+   LABELS
+========================= */
+const labelTranslations = {
+  "In time":"u vremenu",
+  "In space":"u prostoru",
+  "Lit.":"dosl.",
+  "Transf.":"pren.",
+  "ab + abl":"ab + abl",
+  "ablative":"ablativ",
+  "accusative":"akuzativ",
+  "genitive":"genitiv",
+  "dative":"dativ",
+  "general":"općenito",
+  "specific":"specifično",
+  "absolute":"apsolutno",
+  "Fig.":"preneseno",
+  "fig.":"preneseno",
+  "Plur.":"množina"
+};
+
+const senseHeadings = {
+  "Fig., in time":"preneseno, u vremenu",
+  "Fig., in space":"preneseno, u prostoru",
+  "In time":"u vremenu",
+  "In space":"u prostoru",
+  "Lit.":"dosl.",
+  "Transf.":"pren.",
+  "Plur.":"množina"
+};
+
+/* =========================
+   SENSE PARSER (CORE)
+========================= */
+function extractInlineHeading(text) {
+  const m = text.match(
+    /^(Fig\., in time|Fig\., in space|In time|In space|Lit\.|Transf\.|Plur\.)\s*[:;,]/i
+  );
+  return m ? m[1] : null;
+}
+
+function parseSenseNode(node) {
+  if (typeof node === "string") {
+    return [{
+      text: node.trim(),
+      heading: extractInlineHeading(node),
+      tags: detectTags(node),
+      government: detectGovernment(node),
+      children: []
+    }];
+  }
+
+  if (Array.isArray(node)) {
+    const out = [];
+    for (let i = 0; i < node.length; i++) {
+      const cur = node[i];
+      const next = node[i + 1];
+
+      if (typeof cur === "string" && Array.isArray(next)) {
+        out.push({
+          text: null,
+          heading: cur.trim(),
+          tags: [],
+          government: [],
+          children: parseSenseNode(next)
+        });
+        i++;
+      } else if (typeof cur === "string") {
+        out.push({
+          text: cur.trim(),
+          heading: extractInlineHeading(cur),
+          tags: detectTags(cur),
+          government: detectGovernment(cur),
+          children: []
+        });
+      }
+    }
+    return out;
+  }
+
+  return [];
+}
+
+/* =========================
+   GRAMMAR / OBLIK
+========================= */
+function inferOblik(word) {
+  const upos = word.upos || "";
+  const feats = word.features || "";
+  const p = [];
+
+  if (upos.includes("NOUN")) p.push("noun");
+  if (upos.includes("VERB")) p.push("verb");
+  if (upos.includes("ADJ")) p.push("adj");
+  if (upos.includes("ADV")) p.push("adv");
+  if (upos.includes("ADP")) p.push("prep");
+
+  if (feats.includes("Case=Nom")) p.push("nom");
+  if (feats.includes("Case=Acc")) p.push("acc");
+  if (feats.includes("Case=Gen")) p.push("gen");
+  if (feats.includes("Case=Dat")) p.push("dat");
+  if (feats.includes("Case=Abl")) p.push("abl");
+  if (feats.includes("Number=Plur")) p.push("pl");
+  if (feats.includes("Number=Sing")) p.push("sg");
+
+  return p.join(", ") || "-";
+}
+
+/* =========================
+   LOOKUP LEMMA
+========================= */
+function lookupLemma(lemma) {
+  if (!lemma) return null;
+  const l = lemma.toLowerCase();
+  return lewisShort[l] || lewisShort[l + "1"] || lewisShort[l + "2"] || null;
+}
+
+
+
+
+
+
+/* =========================
+   MORPHOLOGY INFERENCE
+========================= */
+
+function inferDeclension(lemma) {
+  if (!lemma) return null;
+  if (lemma.endsWith("a")) return "1. decl.";
+  if (lemma.endsWith("us")) return "2. decl.";
+  if (lemma.endsWith("um")) return "2. decl.";
+  if (lemma.endsWith("er")) return "2. decl.";
+  if (lemma.endsWith("is")) return "3. decl.";
+  if (lemma.endsWith("or")) return "3. decl.";
+  if (lemma.endsWith("o")) return "3. decl.";
+  if (lemma.endsWith("us")) return "4. decl.";
+  if (lemma.endsWith("es")) return "5. decl.";
+  return "unknown decl.";
+}
+
+function inferConjugation(lemma) {
+  if (!lemma) return null;
+  if (lemma.endsWith("are")) return "1. conj.";
+  if (lemma.endsWith("ēre")) return "2. conj.";
+  if (lemma.endsWith("ere")) return "3. conj.";
+  if (lemma.endsWith("ire")) return "4. conj.";
+  if (lemma.endsWith("o")) return "verb (present stem)";
+  return "unknown conj.";
+}
+
+function inferVerbForm(form) {
+  if (!form) return [];
+  const f = form.toLowerCase();
+  const out = [];
+  if (f.endsWith("o")) out.push("1. sg. pres.");
+  if (f.endsWith("s")) out.push("2. sg. pres.");
+  if (f.endsWith("t")) out.push("3. sg. pres.");
+  if (f.endsWith("mus")) out.push("1. pl. pres.");
+  if (f.endsWith("tis")) out.push("2. pl. pres.");
+  if (f.endsWith("nt")) out.push("3. pl. pres.");
+  if (f.endsWith("re")) out.push("infinitive");
+  if (f.endsWith("bam")) out.push("imperf. 1 sg.");
+  if (f.endsWith("bo")) out.push("future 1 sg.");
+  return out;
+}
+
+function inferNounForm(form) {
+  if (!form) return [];
+  const f = form.toLowerCase();
+  const out = [];
+  if (f.endsWith("ae")) out.push("nom./gen. sg. | nom. pl.");
+  if (f.endsWith("am")) out.push("acc. sg.");
+  if (f.endsWith("as")) out.push("acc. pl.");
+  if (f.endsWith("i")) out.push("gen. sg. | nom. pl.");
+  if (f.endsWith("um")) out.push("gen. pl. | acc. sg.");
+  if (f.endsWith("os")) out.push("acc. pl.");
+  if (f.endsWith("e")) out.push("abl. sg.");
+  if (f.endsWith("ibus")) out.push("abl./dat. pl.");
+  return out;
+}
+
+function inferGrammar(word) {
+  const upos = word.upos || "";
+  const lemma = word.lemma || "";
+  const form = word.form || "";
+  const g = [];
+
+  if (upos.includes("VERB")) {
+    g.push("glagol");
+    g.push(inferConjugation(lemma));
+    g.push(...inferVerbForm(form));
+  }
+
+  if (upos.includes("NOUN")) {
+    g.push("imenica");
+    g.push(inferDeclension(lemma));
+    g.push(...inferNounForm(form));
+  }
+
+  if (upos.includes("ADJ")) {
+    g.push("pridjev");
+    g.push(inferDeclension(lemma));
+  }
+
+  if (upos.includes("ADV")) g.push("prilog");
+  if (upos.includes("ADP")) g.push("prijedlog");
+
+  return g.filter(Boolean);
+}
+
+
+
+
+
+
+
+/* =========================
+   RENDER TREE
+========================= */function renderSenseTree(container, nodes, level = 0) {
+  nodes.forEach(node => {
+    const wrapper = document.createElement("div");
+    wrapper.style.marginLeft = `${level * 16}px`;
+    wrapper.style.marginBottom = "14px";
+
+    // --- STRUCTURAL HEADING (always above, never inline) ---
+    if (node.heading) {
+      const h = document.createElement("div");
+      h.className = "sense-meta";
+      h.style.paddingTop = "6px";
+      h.style.marginBottom = "4px";
+      h.textContent = senseHeadings[node.heading] || node.heading;
+      wrapper.appendChild(h);
+    }
+
+    // --- TAGS + GOVERNMENT (true metadata only) ---
+    const metaBits = [...node.tags, ...node.government];
+    if (metaBits.length) {
+      const meta = document.createElement("div");
+      meta.className = "sense-meta";
+      meta.textContent = metaBits
+        .map(l => labelTranslations[l] || l)
+        .join(" • ");
+      wrapper.appendChild(meta);
+    }
+
+    // --- DEFINITION TEXT (ALWAYS NORMAL COLOR) ---
+    if (node.text) {
+      const def = document.createElement("div");
+      def.textContent = node.text;
+      def.style.cursor = node.children.length ? "pointer" : "default";
+      wrapper.appendChild(def);
+    }
+
+    // --- CHILDREN ---
+    if (node.children.length) {
+      const childBox = document.createElement("div");
+      childBox.className = "sense-children";
+      childBox.style.display = "block";
+      wrapper.appendChild(childBox);
+
+      renderSenseTree(childBox, node.children, level + 1);
+    }
+
+    container.appendChild(wrapper);
+  });
+}
+
+
+/* =========================
+   RENDER TABLE
+========================= */
+function renderTable(analysis) {
+  const tbody = document.querySelector("#latinTable tbody");
+  tbody.innerHTML = "";
+
+  analysis.forEach(w => {
+    const tr = document.createElement("tr");
+    const meaningTd = document.createElement("td");
+
+    const raw = lookupLemma(w.lemma);
+    if (raw) {
+      const parsed = parseSenseNode(raw);
+      renderSenseTree(meaningTd, parsed);
+    } else {
+      meaningTd.textContent = w.meaning || w.hr_meaning || "";
+    }
+
+    tr.innerHTML = `
+      <td>${w.form}</td>
+      <td>${w.lemma || ""}</td>
+      <td>${inferGrammar(w).join("<br>")}</td>
+
+    `;
+
+    tr.appendChild(meaningTd);
+    tbody.appendChild(tr);
+  });
+}
+
+/* =========================
+   INIT
+========================= */
+document.addEventListener("DOMContentLoaded", async () => {
+  await loadLewisShort();
+  await loadPhrases();
+});
+</script>
+
+  </body>
+  </html>
