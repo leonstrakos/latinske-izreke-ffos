@@ -2,23 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Latin Phrase</title>
     <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
 
-
-
-
-
-<div class="phrasepage" id="phrase-container">
-    <p>Loading...</p>
-
-
-
+<div class="phrasepage-body-wrapper">
+    <div class="phrasepage-layout" id="phrase-container">
+        </div>
 </div>
-
-
 
 <script>
 async function loadPhrase() {
@@ -26,7 +19,7 @@ async function loadPhrase() {
     const phraseParam = params.get('phrase');
 
     if (!phraseParam) {
-        document.getElementById('phrase-container').textContent = 'No phrase specified.';
+        document.getElementById('phrase-container').innerHTML = '<p class="error-msg">No phrase specified.</p>';
         return;
     }
 
@@ -39,7 +32,7 @@ async function loadPhrase() {
         const entry = data.entries.find(e => e.phrase === decodedPhrase);
 
         if (!entry) {
-            document.getElementById('phrase-container').textContent = 'Phrase not found.';
+            document.getElementById('phrase-container').innerHTML = '<p class="error-msg">Phrase not found.</p>';
             return;
         }
 
@@ -47,13 +40,9 @@ async function loadPhrase() {
 
     } catch (err) {
         console.error(err);
-        document.getElementById('phrase-container').textContent = 'Error loading data.';
+        document.getElementById('phrase-container').innerHTML = '<p class="error-msg">Error loading data.</p>';
     }
 }
-
-
-
-
 
 function renderEntry(entry) {
     const container = document.getElementById('phrase-container');
@@ -63,27 +52,15 @@ function renderEntry(entry) {
         ? "./img/gold_bookmark.png"
         : "./img/silver_bookmark.png";
 
-    // Only display if field is non-empty
-        const authorText = entry.author && entry.author.trim() ? `— ${entry.author}` : "";
-        const sourceText = entry.source && entry.source.trim() ? `(${entry.source})` : "";
-        const yearText = entry.year && entry.year.toString().trim() ? entry.year : "";
+    const authorText = entry.author && entry.author.trim() ? `— ${entry.author}` : "";
+    const sourceText = entry.source && entry.source.trim() ? `(${entry.source})` : "";
+    const yearText = entry.year && entry.year.toString().trim() ? entry.year : "";
 
     container.innerHTML = `
-<div class="top-icons">
-                <img
-                    class="arrow-icon"
-                    src="./img/arrow.png"
-                    alt="back"
-                    onclick="history.back()"
-                >
-
-                <img
-                    class="silver_bookmark"
-                    src="${bookmarkSrc}"
-                    alt="bookmark icon"
-                    data-phrase="${entry.phrase}"
-                >
-            </div>
+        <div class="top-nav-icons">
+            <img class="arrow-icon" src="./img/arrow.png" alt="back" onclick="history.back()">
+            <img class="silver_bookmark" src="${bookmarkSrc}" alt="bookmark icon" data-phrase="${entry.phrase}">
+        </div>
 
         <h1 class="phrasepage h1 chrome-text">„${entry.phrase}“</h1>
 
@@ -92,39 +69,33 @@ function renderEntry(entry) {
             <span class="phrasepage book">${sourceText}</span>
         </div>
 
-        <p class="phrasepage year">${yearText}</p>
+        ${yearText ? `<p class="phrasepage year">${yearText}</p>` : ''}
 
         <div class="phrase-block">
-            <h3 class="phraseh3">English</h3>
-            <p class="phrasep">${entry.common_translation?.en || ""}</p>
-            <p class="phrasep">${entry.meaning || ""}</p>
+            <div class="lang-section">
+                <h3 class="phraseh3">English</h3>
+                <p class="phrasep translation-main">${entry.common_translation?.en || ""}</p>
+                <p class="phrasep translation-sub">${entry.meaning || ""}</p>
+            </div>
 
-            <h3 class="phraseh3">Hrvatski</h3>
-            <p class="phrasep">${entry.common_translation?.hr || ""}</p>
-            <p class="phrasep">${entry.znacenje?.hr || ""}</p>
-
+            <div class="lang-section">
+                <h3 class="phraseh3">Hrvatski</h3>
+                <p class="phrasep translation-main">${entry.common_translation?.hr || ""}</p>
+                <p class="phrasep translation-sub">${entry.znacenje?.hr || ""}</p>
+            </div>
         </div>
     `;
 }
 
-
-
 document.addEventListener('DOMContentLoaded', loadPhrase);
 
-
-/////////////////////////////////////
-//===================================
-// BOOKMARKS
-
-
+// BOOKMARKS LOGIC
 document.addEventListener("click", (e) => {
     if (!e.target.classList.contains("silver_bookmark")) return;
 
     const img = e.target;
-
-    // 🔹 POP ANIMATION
     img.classList.remove("bookmark-pop");
-    void img.offsetWidth; // force reflow so animation can replay
+    void img.offsetWidth; 
     img.classList.add("bookmark-pop");
 
     const phrase = img.dataset.phrase;
@@ -141,9 +112,6 @@ document.addEventListener("click", (e) => {
     saveBookmarks(bookmarks);
 });
 
-
-
-
 function getBookmarks() {
     return JSON.parse(localStorage.getItem("bookmarkedPhrases")) || [];
 }
@@ -156,11 +124,6 @@ function isBookmarked(phrase) {
     return getBookmarks().includes(phrase);
 }
 
-
-
-
-
-
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./service-worker.js")
@@ -168,8 +131,6 @@ if ("serviceWorker" in navigator) {
       .catch(err => console.error("SW registration failed:", err));
   });
 }
-
 </script>
-
 </body>
 </html>
